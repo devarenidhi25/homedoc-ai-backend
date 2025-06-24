@@ -10,10 +10,16 @@ from services import report_interpreter
 import json
 import tempfile
 import os
-# Load trained model and encoders
-model = joblib.load("model/knn_model.pkl")
-mlb = joblib.load("model/symptom_binarizer.pkl")
-le = joblib.load("model/label_encoder.pkl")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+import logging
+logging.basicConfig(level=logging.INFO)
+
+
+# Load trained model and encoders using absolute paths
+model = joblib.load(os.path.join(BASE_DIR, "model", "knn_model.pkl"))
+mlb = joblib.load(os.path.join(BASE_DIR, "model", "symptom_binarizer.pkl"))
+le = joblib.load(os.path.join(BASE_DIR, "model", "label_encoder.pkl"))
+
 
 app = FastAPI()
 
@@ -29,6 +35,9 @@ app.add_middleware(
 class SymptomRequest(BaseModel):
     symptoms: list[str]
 
+@app.get("/")
+def read_root():
+    return {"message": "API is live"}
 
 @app.post("/predict")
 def predict(request: SymptomRequest):
@@ -117,4 +126,5 @@ async def interpret_report(file: UploadFile = File(...)):
             return {"error": "Gemini returned an unreadable format", "raw": raw_response}
 
     except Exception as e:
+        logging.error("Error in /predict: %s", str(e))
         return JSONResponse(status_code=500, content={"error": str(e)})
