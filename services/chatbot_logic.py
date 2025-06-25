@@ -1,33 +1,38 @@
 import os
 from dotenv import load_dotenv
-import google.generativeai as genai
 
-# ========== CONFIGURATION ==========
+# Try to import Gemini only if available
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    genai = None
+    GEMINI_AVAILABLE = False
 
-# Load environment variables from .env file
+# Load .env
 load_dotenv()
 
-# Fetch API key securely
 API_KEY = os.getenv("GEMINI_API_KEY")
-if not API_KEY:
-    raise ValueError("GEMINI_API_KEY is not set in the environment.")
 
-# Configure Gemini client
-genai.configure(api_key=API_KEY)
-
-# Initialize the model and start a chat session
-model = genai.GenerativeModel("models/gemini-1.5-flash")
-chat = model.start_chat(history=[])
+if API_KEY and GEMINI_AVAILABLE:
+    genai.configure(api_key=API_KEY)
+    model = genai.GenerativeModel("models/gemini-1.5-flash")
+    chat = model.start_chat(history=[])
+else:
+    model = None
+    chat = None
 
 
 def get_remedy_reply(user_input: str) -> str:
+    if not model or not chat:
+        return "⚠️ Gemini AI not available in this deployment. Try again later."
+
     user_input = user_input.strip()
-    # 💬 Handle greetings simply (no language detection needed here)
     if user_input.lower() in ["hi", "hello", "hey", "hii", "heyy", "yo"]:
-        return "👋 Hello! I'm HomeDoc AI. How can I help you today? You can describe your symptoms or ask for a home remedy."
-    # 💬 Handle goodbye messages
+        return "👋 Hello! I'm HomeDoc AI. How can I help you today?"
     elif user_input.lower() in ["bye", "goodbye", "see you", "take care"]:
-        return "👋 Goodbye! Take care and stay healthy. If you need help later, just ask!"
+        return "👋 Goodbye! Take care and stay healthy."
+
     prompt = (
         f"You are HomeDoc AI – a certified digital health assistant.\n"
         f"The user said: \"{user_input}\"\n\n"
