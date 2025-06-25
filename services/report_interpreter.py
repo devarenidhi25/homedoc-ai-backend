@@ -7,21 +7,23 @@ import pytesseract
 # Load environment variables
 load_dotenv()
 
-# Check if the GEMINI_API_KEY is set
+# Setup Gemini model only if key is present and package is installed
 API_KEY = os.getenv("GEMINI_API_KEY")
 
-genai = None
-model = None
-
-if API_KEY:
-    try:
+try:
+    if API_KEY:
         import google.generativeai as genai
         genai.configure(api_key=API_KEY)
         model = genai.GenerativeModel("models/gemini-1.5-flash")
-    except Exception as e:
-        print("⚠️ Failed to initialize Gemini:", e)
-else:
-    print("⚠️ GEMINI_API_KEY not set. Gemini features will be disabled.")
+    else:
+        print("⚠️ GEMINI_API_KEY not set. Gemini features will be disabled.")
+        model = None
+except ImportError:
+    print("⚠️ google-generativeai not installed. Gemini features will be disabled.")
+    model = None
+except Exception as e:
+    print(f"⚠️ Failed to initialize Gemini: {e}")
+    model = None
 
 
 def extract_text_from_pdf(file_path):
