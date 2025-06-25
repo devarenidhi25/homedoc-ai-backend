@@ -1,21 +1,27 @@
 import os
 from dotenv import load_dotenv
-import google.generativeai as genai
 import fitz  # PyMuPDF for PDF processing
+from PIL import Image
+import pytesseract
 
-# Load variables from the .env file into the environment
+# Load environment variables
 load_dotenv()
 
-# Securely fetch the API key
+# Check if the GEMINI_API_KEY is set
 API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Validate presence
-if not API_KEY:
-    raise ValueError("GEMINI_API_KEY is not set in the environment.")
+genai = None
+model = None
 
-# Use the API key to configure Gemini
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel("models/gemini-1.5-flash")
+if API_KEY:
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=API_KEY)
+        model = genai.GenerativeModel("models/gemini-1.5-flash")
+    except Exception as e:
+        print("⚠️ Failed to initialize Gemini:", e)
+else:
+    print("⚠️ GEMINI_API_KEY not set. Gemini features will be disabled.")
 
 
 def extract_text_from_pdf(file_path):
@@ -32,6 +38,11 @@ def extract_text_from_image(file_path):
 
 
 def get_gemini_analysis(text, file_name):
+    if not model:
+        return {
+            "error": "Gemini model not available. Make sure GEMINI_API_KEY is set and package is installed."
+        }
+
     prompt = f'''
 You are a helpful, certified digital medical assistant.
 A user has uploaded a medical report named: {file_name}.
@@ -48,7 +59,6 @@ Please analyze the report and return a JSON object with the following structure:
     - recommendations: A list of 3–4 easy-to-follow next steps the patient can take. Include lifestyle advice or self-care tips if applicable.
     - riskFactors: A list of any mentioned or inferred medical risk factors (e.g., obesity, smoking, cancer history). Explain each in layman's terms.
 
-
 **Guidelines:**
 - Use simple, non-technical language.
 - Highlight if a finding is benign, serious, or needs monitoring.
@@ -61,4 +71,4 @@ Output JSON only. Do not include extra commentary or markdown. Keep it concise b
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"⚠️ Error: {e}"
+        return {"error": f"Gemini generation failed: {e}"}
