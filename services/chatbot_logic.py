@@ -40,7 +40,7 @@ def get_remedy_reply(user_input: str) -> str:
         "- Detect the language of the user input.\n"
         "- Respond in the **same language** as the user's input.\n"
         "- Use a gentle, caring, and comforting tone — like a kind nurse.\n"
-        "- Give 3 to 4 practical and simple **home remedies** using common household ingredients (e.g., honey, turmeric, warm water, ginger, salt, etc.).\n"
+        "- Give 3 to 4 simple and practical **home remedies** using common household or natural ingredients (e.g., honey, turmeric, warm water, ginger, salt, tulsi, lemon, garlic, ajwain, ghee, black pepper, clove, cinnamon, cumin, mustard oil, etc.). Feel free to suggest other traditional or widely available ingredients from Indian kitchens, even if not listed here.\n"
         "- Present each remedy as a bullet point:\n"
         "    • Bold heading: short title of remedy\n"
         "    • 1-2 lines of how to prepare and use it\n"
