@@ -47,7 +47,7 @@ def get_remedy_reply(user_input: str) -> str:
         "- Avoid long explanations. Keep it short, warm, and clear.\n"
         "- If needed, give a brief safety warning (e.g., 'If it worsens, consult a doctor').\n"
         "- End with a warm question like: 'Would you like food suggestions?' or 'Need help with anything else?' in the same language.\n"
-        "- If user writes in Hindi or Marathi, reply in that language only.\n"
+        "- Always reply in the **same language** as the user's input, whether it's Hindi, Marathi, Tamil, Telugu, Bengali, Gujarati, or any other Indian language.\n"
     )
 
     try:
