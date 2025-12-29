@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+
+# Model artifacts & binaries
+*.pkl
+*.h5
+
+# Virtual envs / tools
+.venv/
+.env/
+.python-version

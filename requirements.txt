@@ -12,3 +12,5 @@ matplotlib==3.8.4
 seaborn==0.13.2
 joblib==1.4.2
 google-generativeai==0.5.4
+tensorflow==2.15.0
+opencv-python==4.10.0.84
