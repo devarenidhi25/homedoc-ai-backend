@@ -1,21 +1,23 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from services.chatbot_logic import get_remedy_reply
+from services import report_interpreter
+from services.image_diagnosis import predict_image
+
 import joblib
 from collections import OrderedDict
-from fastapi import UploadFile, File
 from fastapi.responses import JSONResponse
-from services import report_interpreter
-import json
 import tempfile
+import json
 import os
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 import logging
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 logging.basicConfig(level=logging.INFO)
 
 
-# Load trained model and encoders using absolute paths
+# ---------- LOAD MODELS (ABSOLUTE PATHS) ----------
 model = joblib.load(os.path.join(BASE_DIR, "model", "knn_model.pkl"))
 mlb = joblib.load(os.path.join(BASE_DIR, "model", "symptom_binarizer.pkl"))
 le = joblib.load(os.path.join(BASE_DIR, "model", "label_encoder.pkl"))
@@ -32,23 +34,24 @@ app.add_middleware(
 )
 
 
+# ---------- HEALTH CHECK ----------
+@app.get("/")
+def root():
+    return {"message": "API running"}
+
+
+# ---------- SYMPTOM PREDICTOR ----------
 class SymptomRequest(BaseModel):
     symptoms: list[str]
 
-@app.get("/")
-def read_root():
-    return {"message": "API is live"}
 
 @app.post("/predict")
 def predict(request: SymptomRequest):
     try:
         input_vector = mlb.transform([request.symptoms])
+
         if input_vector.sum() == 0:
-            return {
-                "error": (
-                    "None of the provided symptoms match our database."
-                )
-            }
+            return {"error": "None of the provided symptoms match our database."}
 
         distances, indices = model.kneighbors(input_vector, n_neighbors=15)
         predicted_diseases = le.inverse_transform(model._y[indices[0]])
@@ -61,33 +64,22 @@ def predict(request: SymptomRequest):
                 "confidence": f"{score}%",
                 "description": f"Match based on symptoms: {disease}.",
                 "recommendations": [
-                    "Consult a doctor for confirmation.",
-                    "Stay hydrated and rest.",
-                    "Do not rely solely on online tools for diagnosis."
+                    "Consult a doctor.",
+                    "Stay hydrated and rest."
                 ],
                 "severity": "Varies"
             })
 
-        # Remove duplicates and keep highest-ranked match
-        results = list(
-            OrderedDict((r["disease"], r) for r in results).values()
-        )
-        # Sort by confidence (highest first)
-        results = sorted(
-            results,
-            key=lambda r: float(r["confidence"].strip('%')),
-            reverse=True
-        )
-
-        # Optionally limit to top 5
-        results = results[:5]
-
-        return {"predictions": results}
+        results = list(OrderedDict((r["disease"], r) for r in results).values())
+        results = sorted(results, key=lambda r: float(r["confidence"].strip('%')), reverse=True)
+        return {"predictions": results[:5]}
 
     except Exception as e:
+        logging.error(e)
         return {"error": str(e)}
 
 
+# ---------- CHATBOT ----------
 class RemedyRequest(BaseModel):
     user_input: str
 
@@ -98,33 +90,46 @@ async def chat_remedy(data: RemedyRequest):
     return {"reply": reply}
 
 
+# ---------- REPORT INTERPRETER ----------
 @app.post("/interpret-report")
 async def interpret_report(file: UploadFile = File(...)):
     try:
         suffix = os.path.splitext(file.filename)[-1]
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(await file.read())
             tmp_path = tmp.name
 
-        if suffix.lower() in [".pdf"]:
+        if suffix.lower() == ".pdf":
             extracted_text = report_interpreter.extract_text_from_pdf(tmp_path)
-        elif suffix.lower() in [".jpg", ".jpeg", ".png", ".bmp", ".tiff"]:
-            extracted_text = report_interpreter.extract_text_from_image(tmp_path)
         else:
-            return JSONResponse(status_code=400, content={"error": "Unsupported file type."})
+            extracted_text = report_interpreter.extract_text_from_image(tmp_path)
 
         if not extracted_text:
-            return JSONResponse(status_code=400, content={"error": "No readable text found in file."})
+            return JSONResponse(status_code=400, content={"error": "No readable text found"})
 
-        raw_response = report_interpreter.get_gemini_analysis(extracted_text, file.filename)
+        raw = report_interpreter.get_gemini_analysis(extracted_text, file.filename)
 
         try:
-            cleaned = raw_response.strip().strip('```json').strip('```')
-            parsed = json.loads(cleaned)
-            return parsed
-        except Exception:
-            return {"error": "Gemini returned an unreadable format", "raw": raw_response}
+            cleaned = raw.strip().strip("```json").strip("```")
+            return json.loads(cleaned)
+        except:
+            return {"raw": raw, "error": "Gemini returned unstructured output"}
 
     except Exception as e:
-        logging.error("Error in /predict: %s", str(e))
+        logging.error(e)
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+# ---------- IMAGE DIAGNOSIS ----------
+@app.post("/predict-image")
+async def predict_medical_image(file: UploadFile = File(...)):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Invalid image file")
+
+    image_bytes = await file.read()
+
+    try:
+        return predict_image(image_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
